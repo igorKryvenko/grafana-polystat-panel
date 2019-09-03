@@ -404,7 +404,9 @@ class D3PolystatPanelCtrl extends MetricsPanelCtrl {
     for (let index = 0; index < this.polystatData.length; index++) {
       if (this.polystatData[index].clickThrough.length === 0) {
         // add the series alias as a var to the clickthroughurl
-        this.polystatData[index].clickThrough = this.getDefaultClickThrough(index);
+        this.getDefaultClickThrough(index).then(url => {
+            this.polystatData[index].clickThrough = url;
+        });
         this.polystatData[index].sanitizeURLEnabled = this.panel.polystat.defaultClickThroughSanitize;
         this.polystatData[index].sanitizedURL = this.$sanitize(this.polystatData[index].clickThrough);
       }
@@ -582,15 +584,45 @@ class D3PolystatPanelCtrl extends MetricsPanelCtrl {
 
   getDefaultClickThrough(index: number) {
     let url = this.panel.polystat.defaultClickThrough;
-    // apply both types of transforms, one targeted at the data item index, and secondly the nth variant
-    url = ClickThroughTransformer.tranformSingleMetric(index, url, this.polystatData);
-    url = ClickThroughTransformer.tranformNthMetric(url, this.polystatData);
-    // process template variables inside clickthrough
-    url = this.templateSrv.replaceWithText(url);
+    if (url !== "") {
+        // apply both types of transforms, one targeted at the data item index, and secondly the nth variant
+        url = ClickThroughTransformer.tranformSingleMetric(index, url, this.polystatData);
+        url = ClickThroughTransformer.tranformNthMetric(url, this.polystatData);
+        // process template variables inside clickthrough
+        url = this.templateSrv.replaceWithText(url);
+    } else {
+        if (!isNaN(index)) {
+            url = this.findDashboardLink(this.polystatData[index].name).then(dashboardLink => {
+              return dashboardLink;
+            });
+        }
+    }
     return url;
   }
 
-  setGlobalUnitFormat(subItem) {
+
+    findDashboardLink(name: string) {
+        let slug = name.split(".")[0];
+        return this.datasource.backendSrv.getDashboardBySlug(slug).then(hits => {
+                const meta = _.find(hits, {slug: slug});
+                if (meta) {
+                    if (meta.url) {
+                        return meta.url;
+                    }
+                }
+            }
+        ).catch(err => {
+          if (err.status === 404) {
+              err.isHandled = true;
+            return "";
+          } else {
+            throw err;
+          }
+        });
+    }
+
+
+    setGlobalUnitFormat(subItem) {
     this.panel.polystat.globalUnitFormat = subItem.value;
   }
 }
